@@ -1,7 +1,9 @@
-prints("hello");
+let actor = SpawnActor();
+// let box = CreateBoxComponent(actor);
+// let sphere = CreateSphereComponent(actor);
 
 let pong = 13;
-printi(pong);
+printi(13);
 
 let dir = GetProjectDirectory();
 prints(dir);
