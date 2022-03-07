@@ -13,6 +13,8 @@ class AIslandGameMode : public AGameModeBase
 
 public:
 	AIslandGameMode();
+
+	static void ExecuteJs(const char* Cmd);
 };
 
 
