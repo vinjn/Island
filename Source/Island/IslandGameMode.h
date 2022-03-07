@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "Engine/World.h"
 #include "IslandGameMode.generated.h"
 
 UCLASS(minimalapi)
@@ -14,7 +15,7 @@ class AIslandGameMode : public AGameModeBase
 public:
 	AIslandGameMode();
 
-	static void ExecuteJs(const char* Cmd);
+	static void ExecuteJs(UWorld* world, const TCHAR* Cmd);
 };
 
 

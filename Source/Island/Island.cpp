@@ -5,6 +5,7 @@
 #include "Misc/DefaultValueHelper.h"
 #include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/FileHelper.h"
 
 #include "IslandGameMode.h"
 
@@ -53,10 +54,38 @@ public:
 
 		APawn* pawn = UGameplayStatics::GetPlayerPawn(world, 0);
 
-		char* result = TCHAR_TO_ANSI(*ArgNoWhitespaces);
-		AIslandGameMode::ExecuteJs(result);
+		AIslandGameMode::ExecuteJs(world, *ArgNoWhitespaces);
 
 		return true;
 	}
 }
 JsExec;
+
+static class FLoadJsCmdExec : private FSelfRegisteringExec
+{
+public:
+	/** Console commands, see embeded usage statement **/
+	virtual bool Exec(UWorld* world, const TCHAR* Cmd, FOutputDevice& Ar) override
+	{
+		const bool bGmCommand = FParse::Command(&Cmd, TEXT("loadjs"));
+		if (!bGmCommand) return false;
+
+		FString AddArgs;
+		const TCHAR* TempCmd = Cmd;
+
+		FString ArgNoWhitespaces = FDefaultValueHelper::RemoveWhitespaces(TempCmd);
+		const bool bIsEmpty = ArgNoWhitespaces.IsEmpty();
+		if (bIsEmpty) return true;
+
+		APawn* pawn = UGameplayStatics::GetPlayerPawn(world, 0);
+
+		FString Content;
+		if (FFileHelper::LoadFileToString(Content, *ArgNoWhitespaces))
+		{
+			AIslandGameMode::ExecuteJs(world, *Content);
+		}
+
+		return true;
+	}
+}
+LoadJsExec;
