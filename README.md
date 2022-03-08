@@ -11,7 +11,7 @@
 # Basics
 
 - [TArray: Arrays in Unreal Engine](https://docs.unrealengine.com/4.27/en-US/ProgrammingAndScripting/ProgrammingWithCPP/UnrealArchitecture/TArrays/)
-
+- [Garbage Collection & Dynamic Memory Allocation](https://nerivec.github.io/old-ue4-wiki/pages/garbage-collection-dynamic-memory-allocation.html)
 
 d:\Epic Games\UE_4.27\Engine\Source\Runtime\Engine\Classes\Engine\World.h
 

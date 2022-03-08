@@ -30,6 +30,8 @@ extern "C" {
 #include "elk/elk.h"
 
 	UWorld* s_world;
+	TArray<UObject*> s_dynamicObjects;
+	TArray<AActor*> s_dynamicActors;
 
 	enum {
 		// IMPORTANT: T_OBJ, T_PROP, T_STR must go first.  That is required by the
@@ -63,6 +65,7 @@ extern "C" {
 		FRotator Rotation(0.0f, 0.0f, 0.0f);
 		auto Actor = s_world->SpawnActor<AActor>(Location, Rotation);
 		Actor->PrimaryActorTick.bCanEverTick = true;
+		s_dynamicActors.Add(Actor);
 
 		return Actor;
 	}
@@ -133,17 +136,46 @@ extern "C" {
 		FActorSpawnParameters SpawnInfo;
 		SpawnInfo.bDeferConstruction = true;
 		auto Actor = s_world->SpawnActor<AglTFRuntimeAssetActor>(SpawnInfo);
+		s_dynamicActors.Add(Actor);
 
 		Actor->Asset = asset;
+		Actor->StaticMeshConfig.bBuildSimpleCollision = true;
+		//Actor->SkeletalMeshConfig.MaterialsConfig.
 
 		Actor->FinishSpawning(SpawnTransform);
 
 		return Actor;
 	}
+
+	void SetSimulatePhysics(AActor* Actor, bool bSimulate)
+	{
+		for (UActorComponent* Component : Actor->GetComponents())
+		{
+			if (UPrimitiveComponent* PrimComp = Cast<UPrimitiveComponent>(Component))
+			{
+				PrimComp->SetSimulatePhysics(bSimulate);
+			}
+		}
+	}
 }
 
 void AIslandGameMode::ExecuteJs(UWorld* world, const TCHAR* Cmd)
 {
+	for (auto& Object : s_dynamicObjects)
+	{
+		if (!Object) continue;
+		if (!Object->IsValidLowLevel()) continue;
+
+		Object->ConditionalBeginDestroy();
+	}
+	s_dynamicObjects.Empty();
+
+	for (auto& Actor : s_dynamicActors)
+	{
+		world->DestroyActor(Actor, false);
+	}
+	s_dynamicActors.Empty();
+
 	s_world = world;
 	// js
 	js = js_create(buf, sizeof(buf));
@@ -161,6 +193,7 @@ void AIslandGameMode::ExecuteJs(UWorld* world, const TCHAR* Cmd)
 	REGISTER_FUNCTION(ExecuteConsoleCommand, "vs");
 	REGISTER_FUNCTION(SetActorLocation, "vpiii");
 	REGISTER_FUNCTION(SetActorScale3D, "vpiii");
+	REGISTER_FUNCTION(SetSimulatePhysics, "vpb");
 
 	REGISTER_FUNCTION(CreateSphereComponent, "pp");
 	REGISTER_FUNCTION(CreateBoxComponent, "pp");
