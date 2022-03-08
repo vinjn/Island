@@ -7,7 +7,10 @@
 #include "Kismet/BlueprintPathsLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
+
 #include "glTFRuntimeFunctionLibrary.h"
+#include "glTFRuntimeAssetActor.h"
+
 #include "GameFramework/Actor.h"
 
 #include "DrawDebugHelpers.h"
@@ -39,8 +42,7 @@ extern "C" {
 	const char* GetProjectDirectory()
 	{
 		FString fstring = UKismetSystemLibrary::GetProjectDirectory();
-		char* charz = TCHAR_TO_ANSI(*fstring);
-		return charz;
+		return TCHAR_TO_ANSI(*fstring);
 	}
 
 	void SetWindowTitle(const char* charz)
@@ -60,25 +62,42 @@ extern "C" {
 		FVector Location(0.0f, 0.0f, 0.0f);
 		FRotator Rotation(0.0f, 0.0f, 0.0f);
 		auto Actor = s_world->SpawnActor<AActor>(Location, Rotation);
+		Actor->PrimaryActorTick.bCanEverTick = true;
 
 		return Actor;
 	}
 
+	void RenameObject(UObject* Object, const char* charz)
+	{
+		Object->Rename(ANSI_TO_TCHAR(charz));
+	}
+
 	USphereComponent* CreateSphereComponent(AActor* Actor)
 	{
-		auto Shape = Actor->CreateDefaultSubobject<USphereComponent>(TEXT("sphere"));
+		auto Shape = NewObject<USphereComponent>(Actor, TEXT("sphere"));
+		Shape->SetupAttachment(Actor->GetRootComponent());
+		Shape->RegisterComponent();
+
 		return Shape;
 	}
 
 	UBoxComponent* CreateBoxComponent(AActor* Actor)
 	{
-		auto Shape = Actor->CreateDefaultSubobject<UBoxComponent>(TEXT("sphere"));
+		auto Shape = NewObject<UBoxComponent>(Actor, TEXT("box"));
+		Shape->SetupAttachment(Actor->GetRootComponent());
+		Shape->RegisterComponent();
+
 		return Shape;
 	}
 
 	bool SetActorLocation(AActor* Actor, float x, float y, float z)
 	{
 		return Actor->SetActorLocation(FVector(x, y, z));
+	}
+
+	void SetActorScale3D(AActor* Actor, float x, float y, float z)
+	{
+		Actor->SetActorScale3D(FVector(x, y, z));
 	}
 
 	void printi(int milli)
@@ -91,6 +110,34 @@ extern "C" {
 	{
 		UE_LOG(LogJs, Log, TEXT("%s"), ANSI_TO_TCHAR(str));
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, ANSI_TO_TCHAR(str));
+	}
+
+	UglTFRuntimeAsset* glTFLoadAssetFromFilename(const char* Filename)
+	{
+		bool bPathRelativeToContent = false;
+		FglTFRuntimeConfig Config;
+		UglTFRuntimeAsset* asset = UglTFRuntimeFunctionLibrary::glTFLoadAssetFromFilename(ANSI_TO_TCHAR(Filename), 
+			bPathRelativeToContent, Config);
+
+		return asset;
+	}
+
+	// https://dawnarc.com/2018/11/ue4pass-parameters-before-triggering-beginplay-spawnactordeferred/
+	AglTFRuntimeAssetActor* gltfSpawnActor(UglTFRuntimeAsset* asset)
+	{
+		FVector Location(0.0f, 0.0f, 0.0f);
+		FRotator Rotation(0.0f, 0.0f, 0.0f);
+		FTransform SpawnTransform = FTransform::Identity;
+
+		FActorSpawnParameters SpawnInfo;
+		SpawnInfo.bDeferConstruction = true;
+		auto Actor = s_world->SpawnActor<AglTFRuntimeAssetActor>(SpawnInfo);
+
+		Actor->Asset = asset;
+
+		Actor->FinishSpawning(SpawnTransform);
+
+		return Actor;
 	}
 }
 
@@ -108,11 +155,17 @@ void AIslandGameMode::ExecuteJs(UWorld* world, const TCHAR* Cmd)
 	REGISTER_FUNCTION(prints, "vs");
 	REGISTER_FUNCTION(GetProjectDirectory, "s");
 	REGISTER_FUNCTION(SpawnActor, "p");
+	REGISTER_FUNCTION(RenameObject, "vps");
 	REGISTER_FUNCTION(SetWindowTitle, "vs");
 	REGISTER_FUNCTION(ExecuteConsoleCommand, "vs");
 	REGISTER_FUNCTION(SetActorLocation, "bpfff");
+	REGISTER_FUNCTION(SetActorScale3D, "bpfff");
+
 	REGISTER_FUNCTION(CreateSphereComponent, "pp");
 	REGISTER_FUNCTION(CreateBoxComponent, "pp");
+	REGISTER_FUNCTION(glTFLoadAssetFromFilename, "ps");
+	REGISTER_FUNCTION(gltfSpawnActor, "pp");
+
 #undef REGISTER_FUNCTION
 #if 0
 	js_set(js, global, "gpio", gpio);                     // let gpio = {};
@@ -130,8 +183,7 @@ void AIslandGameMode::ExecuteJs(UWorld* world, const TCHAR* Cmd)
 		,
 		~0);
 #endif
-	char* result = TCHAR_TO_ANSI(Cmd);
-	jsval_t ret = js_eval(js, result, ~0);
+	jsval_t ret = js_eval(js, TCHAR_TO_ANSI(Cmd), ~0);
 	if (ret != T_UNDEF)
 	{
 		auto Error = ANSI_TO_TCHAR(js_str(js, ret));
