@@ -116,6 +116,7 @@ extern "C" {
 	{
 		bool bPathRelativeToContent = false;
 		FglTFRuntimeConfig Config;
+		Config.bAllowExternalFiles = true;
 		UglTFRuntimeAsset* asset = UglTFRuntimeFunctionLibrary::glTFLoadAssetFromFilename(ANSI_TO_TCHAR(Filename), 
 			bPathRelativeToContent, Config);
 
