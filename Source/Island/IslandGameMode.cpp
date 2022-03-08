@@ -90,9 +90,9 @@ extern "C" {
 		return Shape;
 	}
 
-	bool SetActorLocation(AActor* Actor, float x, float y, float z)
+	void SetActorLocation(AActor* Actor, float x, float y, float z)
 	{
-		return Actor->SetActorLocation(FVector(x, y, z));
+		Actor->SetActorLocation(FVector(x, y, z));
 	}
 
 	void SetActorScale3D(AActor* Actor, float x, float y, float z)
@@ -159,7 +159,7 @@ void AIslandGameMode::ExecuteJs(UWorld* world, const TCHAR* Cmd)
 	REGISTER_FUNCTION(RenameObject, "vps");
 	REGISTER_FUNCTION(SetWindowTitle, "vs");
 	REGISTER_FUNCTION(ExecuteConsoleCommand, "vs");
-	REGISTER_FUNCTION(SetActorLocation, "bpfff");
+	REGISTER_FUNCTION(SetActorLocation, "vpfff");
 	REGISTER_FUNCTION(SetActorScale3D, "bpfff");
 
 	REGISTER_FUNCTION(CreateSphereComponent, "pp");
