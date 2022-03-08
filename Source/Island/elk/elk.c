@@ -43,7 +43,7 @@ typedef uint32_t jsoff_t;
 
 struct js {
   const char *code;  // Currently parsed code snippet
-  char errmsg[36];   // Error message placeholder
+  char errmsg[100];   // Error message placeholder
   uint8_t tok;       // Last parsed token value
   uint8_t flags;     // Execution flags, see F_* enum below
   jsoff_t clen;      // Code snippet length
@@ -214,7 +214,7 @@ static size_t strfunc(struct js *js, jsval_t value, char *buf, size_t len) {
 
 static jsval_t js_err(struct js *js, const char *fmt, ...) {
   va_list ap;
-  size_t n = snprintf(js->errmsg, sizeof(js->errmsg), "#%d %s", js->pos, "ERROR: ");
+  size_t n = snprintf(js->errmsg, sizeof(js->errmsg), "%s #%d %s", js->code, js->pos, "ERROR: ");
   va_start(ap, fmt);
   vsnprintf(js->errmsg + n, sizeof(js->errmsg) - n, fmt, ap);
   va_end(ap);
@@ -789,7 +789,7 @@ static jsval_t call_c(struct js *js, const char *fn, int fnlen, jsoff_t fnoff) {
 			case 'j': args[n++].u64 = v; break;
 			case 'm': args[n++].p = js; break;
 			case 'u': args[n++].p = &js->mem[cbp]; break;
-      default: return js_err(js, "bad sig");
+      default: return js_err(js, "bad sig: %c", fn[i]);
     }
     js->pos = skiptonext(js->code, js->clen, js->pos);
     if (js->pos < js->clen && js->code[js->pos] == ',') js->pos++;
@@ -830,7 +830,7 @@ static jsval_t call_c(struct js *js, const char *fn, int fnlen, jsoff_t fnoff) {
   }
   // clang-format on
   js->nogc = nogc;
-  return js_err(js, "bad sig");
+  return js_err(js, "bad sig 2");
 }
 ///////////////////////////////////////////////  C  FFI implementation end
 
