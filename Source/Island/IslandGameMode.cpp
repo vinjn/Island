@@ -112,7 +112,7 @@ extern "C" {
 	void prints(const char* str)
 	{
 		UE_LOG(LogJs, Log, TEXT("%s"), ANSI_TO_TCHAR(str));
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, ANSI_TO_TCHAR(str));
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, ANSI_TO_TCHAR(str));
 	}
 
 	UglTFRuntimeAsset* glTFLoadAssetFromFilename(const char* Filename)
@@ -159,6 +159,8 @@ extern "C" {
 	}
 }
 
+FTimerHandle HandleJsUpdate;
+
 void AIslandGameMode::ExecuteJs(UWorld* world, const TCHAR* Cmd)
 {
 	for (auto& Object : s_dynamicObjects)
@@ -201,29 +203,22 @@ void AIslandGameMode::ExecuteJs(UWorld* world, const TCHAR* Cmd)
 	REGISTER_FUNCTION(gltfSpawnActor, "pp");
 
 #undef REGISTER_FUNCTION
-#if 0
-	js_set(js, global, "gpio", gpio);                     // let gpio = {};
-	//js_set(js, gpio, "mode", js_import(js, (uintptr_t)myMode, "vii"));
-	//js_set(js, gpio, "write", js_import(js, (uintptr_t)myWrite, "vii"));
-	js_eval(js, "let pin = 13;"     // LED pin. Usually 13, but double-check
-		"  delay(300);"
-		"gpio.mode(pin, 1);"    // Set OUTPUT mode on a LED pin
-		"while (true) {"
-		"  delay(300);"
-		"  gpio.write(pin, 1);"
-		"  delay(300);"
-		"  gpio.write(pin, 0);"
-		"}"
-		,
-		~0);
-#endif
+
 	jsval_t ret = js_eval(js, TCHAR_TO_ANSI(Cmd), ~0);
 	if (ret != T_UNDEF)
 	{
 		auto Error = ANSI_TO_TCHAR(js_str(js, ret));
 		UE_LOG(LogJs, Warning, TEXT("%s"), Error);
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, Error);
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, Error);
 	}
+
+	world->GetTimerManager().ClearTimer(HandleJsUpdate);
+	float FrameRate = 60.0f;
+	if (GEngine && GEngine->bUseFixedFrameRate)
+		FrameRate = GEngine->FixedFrameRate;
+	world->GetTimerManager().SetTimer(HandleJsUpdate, [] {
+		jsval_t ret = js_eval(js, "update()", ~0);
+	}, 1 / FrameRate, true);
 }
 
 AIslandGameMode::AIslandGameMode()
