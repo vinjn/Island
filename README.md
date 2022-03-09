@@ -18,3 +18,8 @@ d:\Epic Games\UE_4.27\Engine\Source\Runtime\Engine\Classes\Engine\World.h
 D:\Epic Games\UE_4.27\Engine\Source\Runtime\Engine\Classes\GameFramework\Actor.h
 
 d:\Epic Games\UE_4.27\Engine\Source\Runtime\Engine\Classes\Components\BoxComponent.h
+
+
+# Editor settings
+
+- %LocalAppData%\UnrealEngine\4.27\Saved\Config\Windows\EditorSettings.ini
