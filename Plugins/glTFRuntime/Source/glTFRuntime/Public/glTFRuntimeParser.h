@@ -1,4 +1,4 @@
-// Copyright 2020, Roberto De Ioris.
+// Copyright 2020-2022, Roberto De Ioris.
 
 #pragma once
 
@@ -242,6 +242,8 @@ enum class EglTFRuntimeMaterialType : uint8
 	Translucent,
 	TwoSided,
 	TwoSidedTranslucent,
+	Masked,
+	TwoSidedMasked
 };
 
 UENUM()
@@ -305,6 +307,32 @@ struct FglTFRuntimeMorphTarget
 };
 
 USTRUCT(BlueprintType)
+struct FglTFRuntimeImagesConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
+	TEnumAsByte<TextureCompressionSettings> Compression;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
+	TEnumAsByte<TextureGroup> Group;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
+	bool bSRGB;
+
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
+	TArray<TSubclassOf<class UglTFRuntimeImageLoader>> AdditionalImageLoaders;
+
+	FglTFRuntimeImagesConfig()
+	{
+		Compression = TextureCompressionSettings::TC_Default;
+		Group = TextureGroup::TEXTUREGROUP_World;
+		bSRGB = false;
+	}
+};
+
+USTRUCT(BlueprintType)
 struct FglTFRuntimeMaterialsConfig
 {
 	GENERATED_BODY()
@@ -344,6 +372,9 @@ struct FglTFRuntimeMaterialsConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
 	TMap<FString, float> ParamsMultiplier;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
+	FglTFRuntimeImagesConfig ImagesConfig;
 
 	FglTFRuntimeMaterialsConfig()
 	{
@@ -409,6 +440,9 @@ struct FglTFRuntimeStaticMeshConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
 	bool bReverseTangents;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
+	bool bUseHighPrecisionUVs;
+
 	FglTFRuntimeStaticMeshConfig()
 	{
 		CacheMode = EglTFRuntimeCacheMode::ReadWrite;
@@ -421,6 +455,7 @@ struct FglTFRuntimeStaticMeshConfig
 		NormalsGenerationStrategy = EglTFRuntimeNormalsGenerationStrategy::IfMissing;
 		TangentsGenerationStrategy = EglTFRuntimeTangentsGenerationStrategy::IfMissing;
 		bReverseTangents = false;
+		bUseHighPrecisionUVs = false;
 	}
 };
 
@@ -621,6 +656,12 @@ struct FglTFRuntimeSkeletalMeshConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
 	EglTFRuntimeMorphTargetsDuplicateStrategy MorphTargetsDuplicateStrategy;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
+	FVector ShiftBounds;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "glTFRuntime")
+	bool bUseHighPrecisionUVs;
+
 	FglTFRuntimeSkeletalMeshConfig()
 	{
 		CacheMode = EglTFRuntimeCacheMode::ReadWrite;
@@ -637,6 +678,8 @@ struct FglTFRuntimeSkeletalMeshConfig
 		bDisableMorphTargets = false;
 		bIgnoreEmptyMorphTargets = true;
 		MorphTargetsDuplicateStrategy = EglTFRuntimeMorphTargetsDuplicateStrategy::Ignore;
+		ShiftBounds = FVector::ZeroVector;
+		bUseHighPrecisionUVs = false;
 	}
 };
 
@@ -784,7 +827,7 @@ struct FglTFRuntimeSkeletalMeshContext : public FGCObject
 			}
 			else
 			{
-#if ENGINE_MINOR_VERSION >= 26
+#if ENGINE_MAJOR_VERSION > 4 || ENGINE_MINOR_VERSION >= 26
 				Outer = CreatePackage(*InSkeletalMeshConfig.SaveToPackage);
 #else
 				Outer = CreatePackage(nullptr, *InSkeletalMeshConfig.SaveToPackage);
@@ -804,6 +847,11 @@ struct FglTFRuntimeSkeletalMeshContext : public FGCObject
 		SkeletalMesh = NewObject<USkeletalMesh>(Outer, NAME_None, Flags);
 		BoundingBox = FBox(EForceInit::ForceInitToZero);
 		SkinIndex = -1;
+	}
+
+	FString GetReferencerName() const override
+	{
+		return "FglTFRuntimeSkeletalMeshContext_Referencer";
 	}
 
 	void AddReferencedObjects(FReferenceCollector& Collector)
@@ -826,6 +874,11 @@ struct FglTFRuntimeStaticMeshContext : public FGCObject
 
 	FglTFRuntimeStaticMeshContext(TSharedRef<FglTFRuntimeParser> InParser, const FglTFRuntimeStaticMeshConfig& InStaticMeshConfig);
 
+	FString GetReferencerName() const override
+	{
+		return "FglTFRuntimeStaticMeshContext_Referencer";
+	}
+
 	void AddReferencedObjects(FReferenceCollector& Collector)
 	{
 		Collector.AddReferencedObject(StaticMesh);
@@ -846,6 +899,22 @@ struct FglTFRuntimeMipMap
 	}
 };
 
+struct FglTFRuntimeTextureTransform
+{
+	FLinearColor Offset;
+	float Rotation;
+	FLinearColor Scale;
+	int32 TexCoord;
+
+	FglTFRuntimeTextureTransform()
+	{
+		Offset = FLinearColor(0, 0, 0, 0);
+		Rotation = 0;
+		Scale = FLinearColor(1, 1, 1, 1);
+		TexCoord = 0;
+	}
+};
+
 struct FglTFRuntimeMaterial
 {
 	bool bTwoSided;
@@ -858,7 +927,7 @@ struct FglTFRuntimeMaterial
 
 	TArray<FglTFRuntimeMipMap> BaseColorTextureMips;
 	UTexture2D* BaseColorTextureCache;
-	int32 BaseColorTexCoord;
+	FglTFRuntimeTextureTransform BaseColorTransform;
 
 	bool bHasMetallicFactor;
 	double MetallicFactor;
@@ -867,22 +936,22 @@ struct FglTFRuntimeMaterial
 
 	TArray<FglTFRuntimeMipMap> MetallicRoughnessTextureMips;
 	UTexture2D* MetallicRoughnessTextureCache;
-	int32 MetallicRoughnessTexCoord;
+	FglTFRuntimeTextureTransform MetallicRoughnessTransform;
 
 	TArray<FglTFRuntimeMipMap> NormalTextureMips;
 	UTexture2D* NormalTextureCache;
-	int32 NormalTexCoord;
+	FglTFRuntimeTextureTransform NormalTransform;
 
 	TArray<FglTFRuntimeMipMap> OcclusionTextureMips;
 	UTexture2D* OcclusionTextureCache;
-	int32 OcclusionTexCoord;
+	FglTFRuntimeTextureTransform OcclusionTransform;
 
 	bool bHasEmissiveFactor;
 	FLinearColor EmissiveFactor;
 
 	TArray<FglTFRuntimeMipMap> EmissiveTextureMips;
 	UTexture2D* EmissiveTextureCache;
-	int32 EmissiveTexCoord;
+	FglTFRuntimeTextureTransform EmissiveTransform;
 
 	bool bHasSpecularFactor;
 	FLinearColor SpecularFactor;
@@ -892,7 +961,7 @@ struct FglTFRuntimeMaterial
 
 	TArray<FglTFRuntimeMipMap> SpecularGlossinessTextureMips;
 	UTexture2D* SpecularGlossinessTextureCache;
-	int32 SpecularGlossinessTexCoord;
+	FglTFRuntimeTextureTransform SpecularGlossinessTransform;
 
 	float BaseSpecularFactor;
 
@@ -901,7 +970,7 @@ struct FglTFRuntimeMaterial
 
 	TArray<FglTFRuntimeMipMap> DiffuseTextureMips;
 	UTexture2D* DiffuseTextureCache;
-	int32 DiffuseTexCoord;
+	FglTFRuntimeTextureTransform DiffuseTransform;
 
 	bool bKHR_materials_pbrSpecularGlossiness;
 	double NormalTextureScale;
@@ -911,7 +980,9 @@ struct FglTFRuntimeMaterial
 	double TransmissionFactor;
 	TArray<FglTFRuntimeMipMap> TransmissionTextureMips;
 	UTexture2D* TransmissionTextureCache;
-	int32 TransmissionTexCoord;
+	FglTFRuntimeTextureTransform TransmissionTransform;
+
+	bool bMasked;
 
 	FglTFRuntimeMaterial()
 	{
@@ -921,33 +992,26 @@ struct FglTFRuntimeMaterial
 		MaterialType = EglTFRuntimeMaterialType::Opaque;
 		bHasBaseColorFactor = false;
 		BaseColorTextureCache = nullptr;
-		BaseColorTexCoord = 0;
 		bHasMetallicFactor = false;
 		bHasRoughnessFactor = false;
 		MetallicRoughnessTextureCache = nullptr;
-		MetallicRoughnessTexCoord = 0;
 		NormalTextureCache = nullptr;
-		NormalTexCoord = 0;
 		OcclusionTextureCache = nullptr;
-		OcclusionTexCoord = 0;
 		bHasEmissiveFactor = false;
 		EmissiveTextureCache = nullptr;
-		EmissiveTexCoord = 0;
 		bHasSpecularFactor = false;
 		bHasGlossinessFactor = false;
 		SpecularGlossinessTextureCache = nullptr;
-		SpecularGlossinessTexCoord = 0;
 		BaseSpecularFactor = 0;
 		bHasDiffuseFactor = false;
 		DiffuseTextureCache = nullptr;
-		DiffuseTexCoord = 0;
 		bKHR_materials_pbrSpecularGlossiness = false;
 		NormalTextureScale = 1;
 		bKHR_materials_transmission = false;
 		bHasTransmissionFactor = true;
 		TransmissionFactor = 0;
 		TransmissionTextureCache = nullptr;
-		TransmissionTexCoord = 0;
+		bMasked = false;
 	}
 };
 
@@ -1082,6 +1146,11 @@ public:
 
 	bool ParseBase64Uri(const FString& Uri, TArray64<uint8>& Bytes);
 
+	FString GetReferencerName() const override
+	{
+		return "FglTFRuntimeParser_Referencer";
+	}
+
 	void AddReferencedObjects(FReferenceCollector& Collector);
 
 	bool LoadPrimitives(TSharedRef<FJsonObject> JsonMeshObject, TArray<FglTFRuntimePrimitive>& Primitives, const FglTFRuntimeMaterialsConfig& MaterialsConfig);
@@ -1124,8 +1193,8 @@ public:
 	TArray<FString> ExtensionsUsed;
 	TArray<FString> ExtensionsRequired;
 
-	bool LoadImage(const int32 ImageIndex, TArray64<uint8>& UncompressedBytes, int32& Width, int32& Height);
-	UTexture2D* BuildTexture(UObject* Outer, const TArray<FglTFRuntimeMipMap>& Mips, const TEnumAsByte<TextureCompressionSettings> Compression, const bool sRGB);
+	bool LoadImage(const int32 ImageIndex, TArray64<uint8>& UncompressedBytes, int32& Width, int32& Height, const FglTFRuntimeImagesConfig& ImagesConfig);
+	UTexture2D* BuildTexture(UObject* Outer, const TArray<FglTFRuntimeMipMap>& Mips, const FglTFRuntimeImagesConfig& ImagesConfig);
 
 protected:
 	TSharedRef<FJsonObject> Root;
@@ -1169,6 +1238,8 @@ protected:
 	int32 FindTopRoot(int32 NodeIndex);
 	bool HasRoot(int32 NodeIndex, int32 RootIndex);
 
+	TSharedPtr<FJsonObject> GetJsonRoot() const { return Root; }
+
 	bool CheckJsonIndex(TSharedRef<FJsonObject> JsonObject, const FString& FieldName, const int32 Index, TArray<TSharedRef<FJsonValue>>& JsonItems);
 	bool CheckJsonRootIndex(const FString FieldName, const int32 Index, TArray<TSharedRef<FJsonValue>>& JsonItems) { return CheckJsonIndex(Root, FieldName, Index, JsonItems); }
 	TSharedPtr<FJsonObject> GetJsonObjectFromIndex(TSharedRef<FJsonObject> JsonObject, const FString& FieldName, const int32 Index);
@@ -1180,7 +1251,9 @@ protected:
 	double GetJsonObjectNumber(TSharedRef<FJsonObject> JsonObject, const FString& FieldName, const double DefaultValue);
 	int32 GetJsonObjectIndex(TSharedRef<FJsonObject> JsonObject, const FString& FieldName, const int32 DefaultValue);
 	int32 GetJsonExtensionObjectIndex(TSharedRef<FJsonObject> JsonObject, const FString& ExtensionName, const FString& FieldName, const int32 DefaultValue);
+	double GetJsonExtensionObjectNumber(TSharedRef<FJsonObject> JsonObject, const FString& ExtensionName, const FString& FieldName, const double DefaultValue);
 	TArray<int32> GetJsonExtensionObjectIndices(TSharedRef<FJsonObject> JsonObject, const FString& ExtensionName, const FString& FieldName);
+	TArray<double> GetJsonExtensionObjectNumbers(TSharedRef<FJsonObject> JsonObject, const FString& ExtensionName, const FString& FieldName);
 
 	bool GetJsonObjectBytes(TSharedRef<FJsonObject> JsonObject, TArray64<uint8>& Bytes);
 	bool GetJsonObjectBool(TSharedRef<FJsonObject> JsonObject, const FString& FieldName, const bool DefaultValue);
@@ -1307,7 +1380,9 @@ protected:
 	{
 		int64 AccessorIndex;
 		if (!JsonObject->TryGetNumberField(Name, AccessorIndex))
+		{
 			return false;
+		}
 
 		TArray64<uint8> Bytes;
 		int64 ComponentType, Stride, Elements, ElementSize, Count;
